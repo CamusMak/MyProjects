@@ -1,0 +1,424 @@
+---
+title: "Expenditure research in Armenia based on Microdata from Armstat."
+author: "Alber Makaryan"
+Form: "Individual Project" 
+Soft: "R, RStudio"  
+date: "10/27/2022"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    
+---
+
+# Introduction
+In this research I used "Household’s Integrated Living Conditions Survey anonymised microdata database (by households)" made by Statistical Comitee of RA for 2019 to explore the features expenditure of Armenian households.
+
+# Expenditure research
+
+## Loading necessary libraries and data.
+
+```{r Libraries, echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(plotly)
+library(scales)
+library(foreign)
+library(haven)
+library(scales)
+library(cowplot)
+library(moments)
+library(knitr)
+library(kableExtra)
+
+options(scipen = 100)
+X2019 <- as_tibble(read.spss("2019.sav", to.data.frame = TRUE))
+N <- length(X2019$totincome)
+
+X2019$hh_02 <- as_factor(X2019$hh_02)
+X2019$headmerstatus <- as_factor(X2019$headmerstatus)
+
+
+```
+
+## Data visualization
+
+### Frequency histogram
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+hist_plot <- ggplot(data = X2019) + 
+  labs(title = "Frequency histogram of expenditures", y = "Frequency", x = "Expenditure") +
+    geom_histogram(aes(x = expend), color = 'blue', fill = 'orange',bins = 100)  +
+      scale_y_continuous(labels = comma) +
+        scale_x_continuous(labels = comma)
+ggplotly(hist_plot)
+```
+
+### Density curve
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+dens_plot <- ggplot(data = X2019) + 
+  labs(title = "Density of Expend&Income", y = "Density", x = "Expenditure&Income") +
+    geom_density(aes(x = expend, y = ..density.., color = "Expend"), size = 1) +
+      geom_density(aes(x = totincome, y = ..density.., color = "Total Income"),  size = 1)+
+      scale_y_continuous(labels = comma) +
+        scale_x_continuous(labels = comma)
+
+ggplotly(dens_plot)
+
+```
+
+### Boxplot
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+box_plot <- ggplot(data = X2019) + labs(title = "Boxplot of expenditures", y = "Expenditure") +
+  geom_boxplot(aes(y = expend))+
+      scale_y_continuous(labels = comma) +
+        scale_x_continuous(labels = comma)
+
+ggplotly(box_plot)
+
+```
+
+
+## Descriptive statistics and Income&Expend comparison
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+DescStat <- data.frame(Row = c("Expend", "Income"),
+                       Min = c(min(X2019$expend), min(X2019$totincome)),
+                       Max = c(max(X2019$expend), max(X2019$totincome)),
+                       Sum = c(sum(X2019$expend), sum(X2019$totincome)),
+                       Range = c((max(X2019$expend)-min(X2019$expend)),(max(X2019$totincome) - min(X2019$totincome))),
+                       Mean = c(mean(X2019$expend), mean(X2019$totincome)),
+                       TrimMean = c(mean(X2019$expend, trim = 10), mean(X2019$totincome, trim = 10)),
+                       Q1 = c(quantile(X2019$expend, names = FALSE)[2], quantile(X2019$totincome, names = FALSE)[2]),
+                       Median = c(median(X2019$expend), median(X2019$totincome)),
+                       Q3 = c(quantile(X2019$expend, names = FALSE)[4], quantile(X2019$totincome, names = FALSE)[4]),
+                       Variance = c(var(X2019$expend), var(X2019$totincome)),
+                       SdDev = c(sd(X2019$expend), sd(X2019$totincome)),
+                       Skewness = c(skewness(X2019$expend), skewness(X2019$totincome)),
+                       Kurtosis = c(kurtosis(X2019$expend), kurtosis(X2019$totincome))
+                       )
+
+
+
+knitr::kable(DescStat,caption = "<center><b>Descriptive statistics measures for Expend&Income",
+             format = "html", digits = 1) %>% kable_styling()
+
+
+
+```
+
+In the table above there is some descriptive statistics measures both for expenditures and income. In that table we can see that maximum value for both variables are almost the same, but surprisingly minimum of expend (1850) is more than minimum of income (0). Sum of total income is about 1.6 times more than sum expend, which indicates what households don't spend all income they get, so, some part of income they save. This relationship (how expend changes when income increases) we can see in the plots below.
+
+### Expend&Income comparison
+ 
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+options(scipen = 1000)
+
+
+
+level<-500000
+totexpend <- X2019$expend
+totincome <- X2019$totincome
+s1 = sum(is.na(totexpend))
+s2 = sum(is.na(totincome))
+
+expend_up_500 <- totexpend[totincome <= level][totincome != 0]
+income_up_500 <- totincome[totincome <= level][totincome != 0]
+
+expend_more_500 <- totexpend[totincome > level]
+income_more_500 <- totincome[totincome > level]
+
+s3 = sum(is.na(expend_up_500))
+s4 = sum(is.na(income_up_500))
+
+ratio_up_500 <- mean(expend_up_500/income_up_500, na.rm =TRUE)
+ratio_more_500 <- mean(expend_more_500/income_more_500)
+
+
+# portion of expend in total income
+ratios <- totexpend[totincome>0]/totincome[totincome>0]
+
+
+
+
+
+up_500 <- data.frame(income = income_up_500, expend = expend_up_500)
+more_500 <- data.frame(income = income_more_500, expend = expend_more_500)
+
+plot_up_500<-ggplot(up_500) +
+  labs(title = "Expend&income when income <= 500,000", x = "Total income", y = "Expenditure") +
+  geom_point(aes(x = income, y = expend),  color = 'orange', alpha = 0.1, shape = 16)+
+  geom_smooth(aes(x = income, y = expend)) +
+  scale_y_continuous(labels = comma) +   scale_x_continuous(labels = comma)
+
+ggplotly(plot_up_500)
+ 
+
+
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+plot_more_500<-ggplot(more_500) +
+  labs(title = "Expend&income when income > 500,000", x = "Total income", y = "Expenditure") +
+  geom_point(aes(x = income, y = expend), color = 'orange')+
+  geom_smooth(aes(x = income, y = expend)) +
+  scale_y_continuous(labels = comma) +   scale_x_continuous(labels = comma)
+
+  
+ggplotly(plot_more_500)
+
+ratio_up_500;ratio_more_500
+
+```
+
+As we can see, when total income less than or equal 500000, increment of income rises expend faster than when total income is more than 500000. For households where total income is less than or equal 500000, expenditures portion in total income is **0.9(90%)**, but for households more than 500000 total income, this ratio is about half times smaller: **0.48**. So, as income increases, the portion of expenditures decrease.
+
+
+
+### Expenditures in Total income
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+options(scipen = 1000)
+ratio_df <- data.frame(expend = totexpend, income = totincome, ratio = totexpend/totincome)
+
+ratio_df_1 <- ratio_df%>%filter(ratio<=1) #ratio is less than or equal to 1
+ratio_df_2 <- ratio_df%>%filter(ratio>1)  #ratio is more than 1
+
+income_ratio_1 <- ratio_df_1%>%filter(income<=500000)
+income_ratio_2 <- ratio_df_2%>%filter(income>500000)
+
+N_1 <- length(ratio_df_1$ratio)  # number of households having ratio less than or equal to 1
+N_2 <- length(ratio_df_2$ratio)  # number of households having ratio more than 1
+# N_1_1 <- length(income_ratio_1$ratio)
+# N_2_1 <- length(income_ratio_2$ratio)
+
+ggplot() + labs(title = "Expend ratio in Income(ratio<=1), N = 4147", y = "Ratio", x = "Income") +
+  geom_point(data = ratio_df_1,aes(x = income, y = ratio), color = 'blue', alpha = .3) +
+    scale_x_continuous(labels = comma)
+  
+
+```
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+ggplot() + labs(title = "Expend ratio in Income(ratio>1), N = 1018", y = "Ratio", x = "Income") +
+  geom_point(data = ratio_df_2, aes(x = income, y = ratio), color = 'red', alpha = .5 ) +
+    scale_x_continuous(labels = comma)    
+
+```
+These two plots above show the portion of expenditures in income. Logically Expenditures should be less than or equal to total income, so, the ratio should be less than or equal to 1, but as we can see in the second plot, there are **1018** households with higher expend level that their total income is, and **4147** have more income level than expend. What we have is that about 20% percent of households in this sample (2019) expends more than their total income, and 80% spend less than total income.  
+```{r}
+```
+
+## T-Tests
+
+### One sample t-test
+
+**$H_0$: The average household expenditures in Armenia are 200000 AMD.<br>**
+**$H_1$: The average household expenditures in Armenia are not equal to 200000 AMD.<br>**
+**$\alpha$ = 0.05**
+
+
+We can do One sample t-test manually, and using R function  t.test.
+
+#### Manual t-test
+
+T-test is based on p-value, which is used to reject or do not reject null hypothesis. To find p-value, we need at first to find t statistic, which describes how far observed data is from the null hypothesis of no relationship between variables or no difference among sample groups. Formula of T statistic given below 
+**$$ T = \frac{\bar{x} - \mu}{se}$$** <br>
+where **$\bar{x}$** is sample mean and **$\mu$** is population mean (null value), and **se** is **standard error of mean**, which is equal to **standard deviation divided by square root of samle size n**.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+options(scipen = 0.1)
+mu <- 200000
+expend <- X2019$expend
+n<- length(expend)
+
+expend.mean <- mean(expend)
+expend.sd <- sd(expend)
+expend.se <- expend.sd/sqrt(n)
+
+
+expend.T <- (expend.mean - mu)/expend.se
+
+
+expend.T <- (expend.mean - mu)/expend.se
+
+
+# P-valu
+
+p_value <- pt(expend.T, df = n-1) + pt(-expend.T, df = n-1, lower.tail = FALSE)
+
+
+#  Confidence intervals
+
+conf_ints <- c(expend.mean + c(-1,1)*qt(.975, df = n-1)*expend.se)
+
+
+manual_test <- data.frame(T_statistic = expend.T, p_value = p_value, conf_int_l = conf_ints[1], conf_int_h = conf_ints[2], df = n-1 )
+
+
+knitr::kable(manual_test, caption = "<center><b>Manula t-test result",
+             format = "html") %>% kable_styling()
+
+
+
+```
+#### T-test function
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+test200 <- t.test(x = expend, mu = mu, alternative = "two.sided")
+test200
+```
+Both manual and R function t test gives p-value much smaller than predefined significance level (**$\alpha$ = 0.5**).
+So, there is satisfactory evidence to reject null hypothesis (**$H_0$: $\mu$ = 200000**) in favor of alternative hypothesis(**$H_0$: $\mu \neq$  200000**).
+
+
+
+#### One sample t-test visualization
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+expend.iqr <- IQR(expend)
+expend.q1 <- quantile(expend, names = FALSE)[2]
+expend.q3 <- quantile(expend, names = FALSE)[4]
+
+# expend.plot <- expend[expend>expend.q1-1.5*expend.iqr]
+# expend.plot <- expend.plot[expend<(expend.q3 + 1.5*expend.iqr)]
+
+expend.plot <- expend[expend<250000]
+
+
+ggplot(as_tibble(expend.plot)) + labs(title = "Density of expends with mean confidence levels (95%)", y = "Density",x = "Expenditures") +
+  geom_density(aes(x = expend.plot, y = ..density..), color = "blue", size = 1) +
+    geom_vline(aes(xintercept = expend.mean, color = "Sample mean"), size = 1) +
+      geom_vline(aes(xintercept=mu, color = "Esitmated mean (null value)"), size = 1) +
+        geom_vline(aes(xintercept = conf_ints[1], color = "Lower limit")) +
+          geom_vline(aes(xintercept = conf_ints[2], color = "Upper limit"))+
+            scale_y_continuous(labels = comma) +
+              scale_x_continuous(labels = comma)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+### Independent t-test
+
+**$H_0$: The average household expenditures in different types of settlements in Armenia are equal.<br>**
+**$H_1$: The average household expenditures in different types of settlements in Armenia are not equal.<br>**
+**$\alpha$ = 0.05**
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+t.test(X2019$expend~X2019$settlement)
+
+```
+Since **$\alpha$ = 0.05**, and p-value is less than  $\alpha$, there is statistically significant difference between two mean of different settlement, so, null hypothesis can be rejected.
+
+
+``` {r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+urban_mean <- mean(X2019$expend[X2019$settlement == "URBAN"])
+rural_mean <- mean(X2019$expend[X2019$settlement == "RURAL"])
+
+
+set_box <- ggplot(data = X2019) + labs(title = "Urab&Rural sett. comparison", x = "Settlemnt", y = "Expenditure") +
+  geom_boxplot(aes(x = settlement , y = expend, color = settlement)) +
+    geom_point(data = as_tibble(c(urban_mean, rural_mean)),aes(x =  c("URBAN","RURAL"), y =c(urban_mean, rural_mean)), color = 'red') +
+      scale_y_continuous(labels = comma)
+
+ggplotly(set_box)
+
+```
+
+
+### Paired Sample t-test
+**$H_0$: The average household expenditures and income in Armenia are equal.<br>**
+**$H_1$: The average household expenditures and income in Armenia are not equal.<br>**
+**$\alpha$ = 0.05**
+
+``` {r echo=TRUE, message=FALSE, warning=FALSE}
+t.test(x = X2019$totincome, y =X2019$expend)
+
+
+```
+
+In paired Sample, null hypothesis is rejected in **$\alpha$ = 0.05** singificance level sinse p-value is less than 
+**$\alpha$**.
+
+
+## Chi-Square test
+
+### New variable
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+X2019 <- X2019%>%mutate(levels_of_expend = case_when(expend <= 80000 ~ "Very low",
+                                                     expend <= 150000 ~ "Low",
+                                                     expend <= 300000 ~ "Medium",
+                                                     expend <= 500000 ~ "High",
+                                                     expend > 500000 ~ "Very high") )
+
+
+X2019$levels_of_expend <- factor(X2019$levels_of_expend, ordered = TRUE, levels = c("Very low", "Low", "Medium",
+                                                                                    "High", "Very high"))
+
+```
+
+
+### Chi-Square test
+
+**$H_0$: Total expend levels and martial status are independent** <br>
+**$H_1$: Total expend levels and martial status are not independent**
+**$\alpha$ = 0.05**
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+chisq.test(X2019$headmerstatus, X2019$levels_of_expend)
+
+```
+P-value of chi-square test is much smaller than 0.05 significance level, and null hypothesis is rejected in 0.05 significance level.
+
+## ANOVA
+
+**$H_0$: The means in the groups are equal <br>**
+**$H_1$: At least one mean is different**
+**$\alpha$ = 0.05**
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+summary(aov(data = X2019,expend ~ headmerstatus))
+```
+P-value of ANOVA test is much smaller than 0.05 significance level, so null hypothesis is rejected in 0.05 significance level.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+X2019_1 <- X2019%>%group_by(headmerstatus)%>%summarise(average = mean(expend))
+
+mar_box <- ggplot() + labs(title = "Expends by Marital status", y = "Expenditures", x = "Marital status") +
+  geom_boxplot(data = X2019, aes(y = expend, x = headmerstatus, color = headmerstatus)) +
+    geom_point(data = X2019_1, aes(y = average, x = headmerstatus), color = "red")+
+      scale_y_continuous(labels = comma)
+
+ggplotly(mar_box)
+
+```
+
